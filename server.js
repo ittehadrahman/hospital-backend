@@ -14,6 +14,7 @@ mongoose.connect(process.env.mongoURI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
 })
+//Changes
 .then(() => console.log('MongoDB Connected Successfully'))
 .catch(err => {
   console.error('MongoDB Connection Error:', err.message);
