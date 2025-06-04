@@ -2,6 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const patientRoutes = require('./src/routes/patientRoutes.js');
+
 require('dotenv').config();
 
 const app = express();
@@ -18,6 +20,7 @@ app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to my Express API!' });
 });
+app.use('/api/patients', patientRoutes);
 
 // Basic error handling middleware
 app.use((err, req, res, next) => {
