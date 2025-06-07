@@ -1,22 +1,26 @@
 const express = require('express');
-const router = express.Router();
-// Make sure this path matches your folder structure
 const userController = require('../controllers/userController');
-const { validateUserInput, validatePasswordUpdate } = require('../middleware/authMiddleware');
+const { authenticateToken, requireRole } = require('../middleware/auth');
+const { validateUser } = require('../middleware/validation');
 
-// GET all users
-router.get('/', userController.getAllUsers);
+const router = express.Router();
 
-// POST create new user
-router.post('/', userController.createUser);
+// All routes require authentication
+router.use(authenticateToken);
 
-// PUT update user
-router.put('/:id', validateUserInput, userController.updateUser);
+// GET /api/users
+router.get('/', requireRole(['superadmin', 'admin']), userController.getAllUsers);
 
-// PUT update user password
-router.put('/:id/password', validatePasswordUpdate, userController.updatePassword);
+// GET /api/users/:id
+router.get('/:id', requireRole(['superadmin', 'admin']), userController.getUserById);
 
-// DELETE user
-router.delete('/:id', userController.deleteUser);
+// POST /api/users
+router.post('/', requireRole(['superadmin', 'admin']), validateUser, userController.createUser);
+
+// PUT /api/users/:id
+router.put('/:id', requireRole(['superadmin', 'admin']), userController.updateUser);
+
+// DELETE /api/users/:id
+router.delete('/:id', requireRole(['superadmin', 'admin']), userController.deleteUser);
 
 module.exports = router;
