@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const patientRoutes = require('./src/routes/patientRoutes.js');
 const dotenv = require('dotenv');
 const { connectDB } = require('./src/utils/db.js');
+dotenv.config(); 
 
 // Initialize express app
 const app = express();
