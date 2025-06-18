@@ -4,8 +4,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const patientRoutes = require('./src/routes/patientRoutes.js');
-const dotenv = require('dotenv');
-dotenv.config(); 
+
+require('dotenv').config();
 
 // Initialize express app
 const app = express();
