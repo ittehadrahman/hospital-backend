@@ -2,10 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-require('dotenv').config();
+const patientRoutes = require('./src/routes/patientRoutes.js');
+const dotenv = require('dotenv');
+const { connectDB } = require('./src/utils/db.js');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+dotenv.config();
 
 // Middleware
 app.use(helmet()); // Security headers
@@ -18,6 +21,7 @@ app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to my Express API!' });
 });
+app.use('/api/patients',patientRoutes);
 
 // Basic error handling middleware
 app.use((err, req, res, next) => {
@@ -30,6 +34,9 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+
+app.listen(PORT,() => {
+    console.log(`Server is running on port ${PORT}`);
+    connectDB();
+})
+
