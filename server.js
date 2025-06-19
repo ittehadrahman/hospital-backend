@@ -44,6 +44,10 @@ app.get('/', (_req, res) =>
 );
 
 
+// Use medicine routes
+const medicineRoutes = require('./src/routes/medicineRoutes');
+app.use('/api/medicine', medicineRoutes);
+
 //ROUTE MODULES  ⬅️  (all requires in one place)
 
 const patientRoutes      = require('./src/routes/patientRoutes');      // NEW: imported & used
