@@ -41,6 +41,10 @@ app.get('/', (req, res) => {
 // Import routes - Make sure this path is correct
 const userRoutes = require('./src/routes/userRoutes');
 
+// Use medicine routes
+const medicineRoutes = require('./src/routes/medicineRoutes');
+app.use('/api/medicine', medicineRoutes);
+
 // Use routes 
 app.use('/api/users', userRoutes);
 

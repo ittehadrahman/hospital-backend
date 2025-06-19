@@ -6,7 +6,7 @@ const medicineSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    description: {
+    generic: {
         type: String,
         required: true,
         trim: true
@@ -25,6 +25,10 @@ const medicineSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: 0
+    },
+    batchNumber: {
+        type: String,
+        required: true,
     },
     expiryDate: {
         type: Date,
