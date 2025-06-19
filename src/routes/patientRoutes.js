@@ -1,5 +1,5 @@
 const express = require('express');
-const { createPatient,getPatientByPhoneNumber } =require('../controller/patientController.js');
+const { createPatient,getPatientByPhoneNumber } =require('../controllers/patientController.js');
 const router = express.Router();
 
 router.post('/patient-create',createPatient);
