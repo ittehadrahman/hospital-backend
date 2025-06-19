@@ -1,67 +1,75 @@
-const express = require('express');
+const express  = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const patientRoutes = require('./src/routes/patientRoutes.js');
-const dotenv = require('dotenv');
-dotenv.config(); 
+const cors     = require('cors');
+const helmet   = require('helmet');
+const morgan   = require('morgan');
+const dotenv   = require('dotenv');
 
-// Initialize express app
-const app = express();
+dotenv.config();                                // ← load .env first
+
+
+//INIT APP & PORT
+
+const app  = express();
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB
-mongoose.connect(process.env.mongoURI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-//Changes
-.then(() => console.log('MongoDB Connected Successfully'))
-.catch(err => {
-  console.error('MongoDB Connection Error:', err.message);
-  process.exit(1);
-});
 
-// Middleware
+//CONNECT TO MONGODB
+
+mongoose
+  .connect(process.env.mongoURI, {              // uses key from .env
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  })
+  .then(() => console.log('MongoDB Connected Successfully'))
+  .catch(err => {
+    console.error('MongoDB Connection Error:', err.message);
+    process.exit(1);
+  });
+
+
+//GLOBAL MIDDLEWARE
+
 app.use(helmet());
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Welcome route
-app.get('/', (req, res) => {
-  res.json({ 
-    success: true,
-    message: 'Welcome to the Express API' 
-  });
-});
 
-// Import routes - Make sure this path is correct
-const userRoutes = require('./src/routes/userRoutes');
+//TEST ROUTE
 
-// Use routes 
-app.use('/api/users', userRoutes);
+app.get('/', (_req, res) =>
+  res.json({ success: true, message: 'Welcome to the Express API' })
+);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ 
-    success: false, 
-    error: 'Route not found' 
-  });
-});
 
-// Error handling middleware
-app.use((err, req, res, next) => {
+//ROUTE MODULES  ⬅️  (all requires in one place)
+
+const patientRoutes      = require('./src/routes/patientRoutes');      // NEW: imported & used
+const userRoutes         = require('./src/routes/userRoutes');
+const outdoorVisitRoutes = require('./src/routes/outdoorVisitRoutes');
+
+
+//MOUNT ROUTES   ⬅️  (before 404 handler)
+
+app.use('/api/patients',       patientRoutes);   // NEW: makes POST /api/patients/patient-create work
+app.use('/api/users',          userRoutes);
+app.use('/api/outdoor-visits', outdoorVisitRoutes);
+
+
+// 404 & ERROR HANDLERS (keep at the end)
+
+app.use((_req, res) =>
+  res.status(404).json({ success: false, error: 'Route not found' })
+);
+
+app.use((err, _req, res, _next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    success: false, 
-    error: err.message || 'Server Error' 
-  });
+  res.status(500).json({ success: false, error: err.message || 'Server Error' });
 });
 
-// Start server
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
+//START SERVER
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
