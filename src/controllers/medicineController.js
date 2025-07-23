@@ -350,3 +350,18 @@ exports.getMedicineByBrand = async (req, res) => {
         });
     }
 }
+
+// get available current inventory
+// GET /api/medicines/inventory
+exports.getAvailableInventory = async (req, res) => {
+    try {
+        const medicines = await Medicine.find(
+            { currentStock: { $gt: 0 } },
+            { name: 1, generic: 1, currentStock: 1, _id: 1 }
+        );
+        res.status(200).json({ medicines });
+    } catch (error) {
+        console.error('Error fetching available inventory:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
