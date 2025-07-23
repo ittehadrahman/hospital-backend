@@ -316,3 +316,66 @@ exports.getAllReceipts = async (req, res) => {
     }
 };
 
+// Get a sales report of all time
+exports.getSalesReport = async (req, res) => {
+    try {
+        // Get all receipts
+        const receipts = await Receipt.find();
+        
+        // Calculate total revenue
+        const totalRevenue = receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0);
+        
+        // Calculate total unique patients
+        const uniquePatients = new Set(receipts.map(receipt => receipt.patientId.toString()));
+        const totalPatients = uniquePatients.size;
+        
+        // Calculate medicine statistics
+        const medicineStats = {};
+        let totalMedicines = 0;
+        
+        receipts.forEach(receipt => {
+            receipt.medicines.forEach(medicine => {
+                // Use medicineId as fallback key if medicineName is missing
+                const key = medicine.medicineName || medicine.medicineId || 'Unknown Medicine';
+                
+                if (!medicineStats[key]) {
+                    medicineStats[key] = {
+                        medicineName: medicine.medicineName || 'Unknown Medicine',
+                        generic: medicine.generic || 'Unknown Generic',
+                        brand: medicine.brand || 'Unknown Brand',
+                        totalQuantitySold: 0,
+                        totalRevenue: 0
+                    };
+                }
+                
+                medicineStats[key].totalQuantitySold += medicine.quantity;
+                medicineStats[key].totalRevenue += medicine.total;
+                totalMedicines += medicine.quantity;
+            });
+        });
+        
+        // Convert medicine stats to array and sort by total revenue (highest first)
+        const medicineReport = Object.values(medicineStats).sort((a, b) => b.totalRevenue - a.totalRevenue);
+        
+        // Count total unique medicine types
+        const totalMedicineTypes = Object.keys(medicineStats).length;
+        
+        res.status(200).json({
+            message: 'Sales report generated successfully',
+            report: {
+                summary: {
+                    totalRevenue: totalRevenue,
+                    totalPatients: totalPatients,
+                    totalMedicinesSold: totalMedicines,
+                    totalMedicineTypes: totalMedicineTypes,
+                    totalReceipts: receipts.length
+                },
+                medicineDetails: medicineReport
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error generating sales report:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};

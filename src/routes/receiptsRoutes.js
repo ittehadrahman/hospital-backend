@@ -14,6 +14,9 @@ router.post('/delete', receiptsController.deleteReceipt);
 // GET: Get all receipts
 router.get('/all', receiptsController.getAllReceipts);
 
+// GET: Sales report of all time
+router.get('/report', receiptsController.getSalesReport);
+
 
 
 module.exports = router;
