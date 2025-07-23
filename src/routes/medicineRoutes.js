@@ -26,4 +26,8 @@ router.post('/generic', medicineController.getMedicineByGeneric);
 // Get medicines by brand name
 router.post('/brand', medicineController.getMedicineByBrand);
 
+// POST: Sell a medicine
+// This endpoint updates the stock of the medicine after a sale
+router.post('/sell', medicineController.sellMedicine);
+
 module.exports = router;

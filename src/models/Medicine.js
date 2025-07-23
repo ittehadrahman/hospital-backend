@@ -16,24 +16,31 @@ const medicineSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    price: {
+    currentStock: {
         type: Number,
         required: true,
         min: 0
     },
-    stock: {
-        type: Number,
-        required: true,
-        min: 0
-    },
-    batchNumber: {
-        type: String,
-        required: true,
-    },
-    expiryDate: {
-        type: Date,
-        required: true
-    },
+    batches: [{
+        batchNumber: {
+            type: String,
+            required: true,
+        },
+        expiryDate: {
+            type: Date,
+            required: true
+        },
+        price: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        quantity: {
+            type: Number,
+            required: true,
+            min: 0
+        }
+    }],
     createdAt: {
         type: Date,
         default: Date.now

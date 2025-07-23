@@ -48,6 +48,9 @@ app.get('/', (_req, res) =>
 const medicineRoutes = require('./src/routes/medicineRoutes');
 app.use('/api/medicine', medicineRoutes);
 
+const receiptsRoutes = require('./src/routes/receiptsRoutes');
+app.use('/api/receipt', receiptsRoutes); // NEW: added receipts routes
+
 //ROUTE MODULES  ⬅️  (all requires in one place)
 
 const patientRoutes      = require('./src/routes/patientRoutes');      // NEW: imported & used

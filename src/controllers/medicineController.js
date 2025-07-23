@@ -3,45 +3,81 @@ const Medicine = require("../models/Medicine");
 // Create or update stock if identical medicine exists
 exports.createMedicine = async (req, res) => {
     try {
-        let { name, generic, brand, price, stock, batchNumber, expiryDate } =
-        req.body;
+        let { name, generic, brand, batchNumber, expiryDate, price, quantity } = req.body;
 
-        // Make sure stock & price are numbers
-        stock = Number(stock);
+        // Make sure price and quantity are numbers
         price = Number(price);
-
-        if (isNaN(stock) || isNaN(price)) {
-        return res
-            .status(400)
-            .json({ message: "Stock and price must be valid numbers." });
+        quantity = Number(quantity);
+        if (isNaN(price) || isNaN(quantity)) {
+            return res.status(400).json({ message: "Price and quantity must be valid numbers." });
         }
 
-        const existingMedicine = await Medicine.findOne({
+        // Scenario 1: Check for exact match (name, generic, brand, batchNumber, expiryDate, price)
+        const exactMatch = await Medicine.findOne({
             name,
             generic,
             brand,
-            price,
-            batchNumber,
-            expiryDate,
+            "batches.batchNumber": batchNumber,
+            "batches.expiryDate": expiryDate,
+            "batches.price": price,
         });
 
-        if (existingMedicine) {
-        existingMedicine.stock += stock; // now both are numbers
-        const updatedMedicine = await existingMedicine.save();
+        if (exactMatch) {
+            // Find the specific batch and update its quantity
+            const batchIndex = exactMatch.batches.findIndex(batch => 
+                batch.batchNumber === batchNumber && 
+                batch.expiryDate.getTime() === new Date(expiryDate).getTime() && 
+                batch.price === price
+            );
+            
+            exactMatch.batches[batchIndex].quantity += quantity;
+            // Auto-calculate currentStock from all batches
+            exactMatch.currentStock = exactMatch.batches.reduce((total, batch) => total + batch.quantity, 0);
+            const updatedMedicine = await exactMatch.save();
 
-        return res.status(200).json({
-            message: "Medicine already exists. Stock updated successfully.",
-            medicine: updatedMedicine,
+            return res.status(200).json({
+                message: "Exact medicine batch found. Quantity and stock updated successfully.",
+                medicine: updatedMedicine,
+            });
+        }
+
+        // Scenario 2: Check for partial match (name, generic, brand only)
+        const partialMatch = await Medicine.findOne({
+            name,
+            generic,
+            brand,
         });
-        } else {
+
+        if (partialMatch) {
+            // Add new batch to existing medicine
+            partialMatch.batches.push({
+                batchNumber,
+                expiryDate,
+                price,
+                quantity
+            });
+            // Auto-calculate currentStock from all batches
+            partialMatch.currentStock = partialMatch.batches.reduce((total, batch) => total + batch.quantity, 0);
+            const updatedMedicine = await partialMatch.save();
+
+            return res.status(200).json({
+                message: "Medicine found. New batch added and stock updated successfully.",
+                medicine: updatedMedicine,
+            });
+        }
+
+        // Scenario 3: No match - create new medicine
         const newMedicine = new Medicine({
             name,
             generic,
             brand,
-            price,
-            stock,
-            batchNumber,
-            expiryDate,
+            currentStock: quantity, // Initial stock equals the first batch quantity
+            batches: [{
+                batchNumber,
+                expiryDate,
+                price,
+                quantity
+            }]
         });
 
         const savedMedicine = await newMedicine.save();
@@ -50,12 +86,12 @@ exports.createMedicine = async (req, res) => {
             message: "New medicine created successfully.",
             medicine: savedMedicine,
         });
-        }
+
     } catch (error) {
         console.error(error);
         res.status(500).json({
-        message: "Error creating or updating medicine",
-        error: error.message,
+            message: "Error creating or updating medicine",
+            error: error.message,
         });
     }
 };
@@ -66,30 +102,60 @@ exports.deleteMedicine = async (req, res) => {
         const { name, batchNumber } = req.body;
 
         if (!name || !batchNumber) {
-        return res.status(400).json({
-            message: 'Name and batchNumber are required to delete a medicine'
-        });
+            return res.status(400).json({
+                message: 'Name and batchNumber are required to delete a medicine'
+            });
         }
 
-        // Find and delete the medicine
-        const deletedMedicine = await Medicine.findOneAndDelete({ name, batchNumber });
-
-        if (!deletedMedicine) {
-        return res.status(404).json({
-            message: 'Medicine not found with the provided name and batchNumber'
+        // Find the medicine that contains the batch
+        const medicine = await Medicine.findOne({
+            name,
+            "batches.batchNumber": batchNumber
         });
+
+        if (!medicine) {
+            return res.status(404).json({
+                message: 'Medicine not found with the provided name and batchNumber'
+            });
         }
+
+        // Find the batch to be deleted
+        const batchToDelete = medicine.batches.find(batch => batch.batchNumber === batchNumber);
+        
+        if (!batchToDelete) {
+            return res.status(404).json({
+                message: 'Batch not found in the medicine'
+            });
+        }
+
+        // If this is the only batch, delete the entire medicine
+        if (medicine.batches.length === 1) {
+            const deletedMedicine = await Medicine.findByIdAndDelete(medicine._id);
+            return res.status(200).json({
+                message: 'Medicine deleted successfully (last batch removed)',
+                medicine: deletedMedicine
+            });
+        }
+
+        // Remove the specific batch from the batches array
+        medicine.batches = medicine.batches.filter(batch => batch.batchNumber !== batchNumber);
+        
+        // Recalculate currentStock after removing the batch
+        medicine.currentStock = medicine.batches.reduce((total, batch) => total + batch.quantity, 0);
+        
+        const updatedMedicine = await medicine.save();
 
         res.status(200).json({
-        message: 'Medicine deleted successfully',
-        medicine: deletedMedicine
+            message: 'Batch deleted successfully',
+            medicine: updatedMedicine,
+            deletedBatch: batchToDelete
         });
 
     } catch (error) {
         console.error(error);
         res.status(500).json({
-        message: 'Error deleting medicine',
-        error: error.message
+            message: 'Error deleting medicine batch',
+            error: error.message
         });
     }
 };
@@ -99,50 +165,62 @@ exports.deleteMedicine = async (req, res) => {
 // Update a medicine by name and batchNumber
 exports.updateMedicine = async (req, res) => {
     try {
-        const { name, batchNumber, generic, brand, price, stock, expiryDate } = req.body;
+        const { name, batchNumber, generic, brand, price, quantity, expiryDate } = req.body;
 
         if (!name || !batchNumber) {
-        return res.status(400).json({
-            message: 'Name and batchNumber are required to update a medicine'
-        });
+            return res.status(400).json({
+                message: 'Name and batchNumber are required to update a medicine'
+            });
         }
 
-        // Build update object dynamically
-        const updateFields = {};
-
-        if (generic !== undefined) updateFields.generic = generic;
-        if (brand !== undefined) updateFields.brand = brand;
-        if (price !== undefined) updateFields.price = Number(price);
-        if (stock !== undefined) updateFields.stock = Number(stock);
-        if (expiryDate !== undefined) updateFields.expiryDate = expiryDate;
-
-        const updatedMedicine = await Medicine.findOneAndUpdate(
-        { name, batchNumber },
-        { $set: updateFields },
-        { new: true, runValidators: true }
-        );
-
-        if (!updatedMedicine) {
-        return res.status(404).json({
-            message: 'Medicine not found with the provided name and batchNumber'
+        // Find the medicine that contains the batch
+        const medicine = await Medicine.findOne({
+            name,
+            "batches.batchNumber": batchNumber
         });
+
+        if (!medicine) {
+            return res.status(404).json({
+                message: 'Medicine not found with the provided name and batchNumber'
+            });
         }
+
+        // Update medicine-level fields if provided
+        if (generic !== undefined) medicine.generic = generic;
+        if (brand !== undefined) medicine.brand = brand;
+
+        // Find and update the specific batch
+        const batchIndex = medicine.batches.findIndex(batch => batch.batchNumber === batchNumber);
+        
+        if (batchIndex === -1) {
+            return res.status(404).json({
+                message: 'Batch not found in the medicine'
+            });
+        }
+
+        // Update batch-specific fields if provided
+        if (price !== undefined) medicine.batches[batchIndex].price = Number(price);
+        if (quantity !== undefined) medicine.batches[batchIndex].quantity = Number(quantity);
+        if (expiryDate !== undefined) medicine.batches[batchIndex].expiryDate = expiryDate;
+
+        // Recalculate currentStock after updating batch quantity
+        medicine.currentStock = medicine.batches.reduce((total, batch) => total + batch.quantity, 0);
+
+        const updatedMedicine = await medicine.save();
 
         res.status(200).json({
-        message: 'Medicine updated successfully',
-        medicine: updatedMedicine
+            message: 'Medicine updated successfully',
+            medicine: updatedMedicine
         });
 
     } catch (error) {
         console.error(error);
         res.status(500).json({
-        message: 'Error updating medicine',
-        error: error.message
+            message: 'Error updating medicine',
+            error: error.message
         });
     }
 };
-
-
 
 
 
@@ -163,6 +241,7 @@ exports.getAllMedicines = async (req, res) => {
     }
 };
 
+// Get medicines by name via POST body with exact match and variants
 exports.getMedicineByName = async (req, res) => {
     try {
         const { name } = req.body;
