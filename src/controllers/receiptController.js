@@ -84,20 +84,11 @@ exports.createReceipt = async (req, res) => {
                 if (batch) {
                     batch.quantity -= quantity;
                     
-                    // Remove batch if quantity becomes 0
-                    if (batch.quantity === 0) {
-                        medicine.batches = medicine.batches.filter(b => b.batchNumber !== batchNumber);
-                    }
-                    
-                    // Recalculate currentStock from all remaining batches
+                    // Keep batch even if quantity becomes 0 (don't delete)
+                    // Recalculate currentStock from all batches
                     medicine.currentStock = medicine.batches.reduce((total, batch) => total + batch.quantity, 0);
                     
-                    // If no batches left, delete the medicine
-                    if (medicine.batches.length === 0) {
-                        await Medicine.findByIdAndDelete(medicine._id);
-                    } else {
-                        await medicine.save();
-                    }
+                    await medicine.save();
                 }
             }
         }
@@ -222,20 +213,11 @@ exports.updateReceipt = async (req, res) => {
                 if (batch) {
                     batch.quantity -= quantity;
                     
-                    // Remove batch if quantity becomes 0
-                    if (batch.quantity === 0) {
-                        medicine.batches = medicine.batches.filter(b => b.batchNumber !== batchNumber);
-                    }
-                    
-                    // Recalculate currentStock from all remaining batches
+                    // Keep batch even if quantity becomes 0 (don't delete)
+                    // Recalculate currentStock from all batches
                     medicine.currentStock = medicine.batches.reduce((total, batch) => total + batch.quantity, 0);
                     
-                    // If no batches left, delete the medicine
-                    if (medicine.batches.length === 0) {
-                        await Medicine.findByIdAndDelete(medicine._id);
-                    } else {
-                        await medicine.save();
-                    }
+                    await medicine.save();
                 }
             }
         }
@@ -374,6 +356,250 @@ exports.getSalesReport = async (req, res) => {
             }
         });
         
+    } catch (error) {
+        console.error('Error generating sales report:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+// Get a receipt by ID
+exports.getReceiptById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Validate receipt exists
+        const receipt = await Receipt.findById(id).populate('patientId', 'name phone_number');
+        if (!receipt) {
+            return res.status(404).json({ message: 'Receipt not found' });
+        }
+
+        // Enhance medicine details if missing (for backward compatibility)
+        const enhancedMedicines = await Promise.all(receipt.medicines.map(async (medicine) => {
+            // If medicine details are already present, return as is
+            if (medicine.medicineName && medicine.generic && medicine.brand) {
+                return medicine;
+            }
+
+            // Otherwise, fetch medicine details from Medicine collection
+            try {
+                const medicineDoc = await Medicine.findById(medicine.medicineId);
+                if (medicineDoc) {
+                    return {
+                        ...medicine.toObject(),
+                        medicineName: medicine.medicineName || medicineDoc.name,
+                        generic: medicine.generic || medicineDoc.generic,
+                        brand: medicine.brand || medicineDoc.brand,
+                        price: medicine.price || 0,
+                        batchNumber: medicine.batchNumber || 'N/A'
+                    };
+                }
+            } catch (error) {
+                console.warn(`Could not fetch medicine details for ID: ${medicine.medicineId}`);
+            }
+
+            // Fallback with available data
+            return {
+                ...medicine.toObject(),
+                medicineName: medicine.medicineName || 'Unknown Medicine',
+                generic: medicine.generic || 'Unknown Generic',
+                brand: medicine.brand || 'Unknown Brand',
+                price: medicine.price || 0,
+                batchNumber: medicine.batchNumber || 'N/A'
+            };
+        }));
+
+        res.status(200).json({ 
+            receipt: {
+                ...receipt.toObject(),
+                medicines: enhancedMedicines
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching receipt:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+// Get all receipts for a specific patient
+exports.getReceiptsByPatient = async (req, res) => {
+    try {
+        const { patientId } = req.params;
+
+        // Validate patient exists
+        const patient = await Patient.findById(patientId);
+        if (!patient) {
+            return res.status(404).json({ message: 'Patient not found' });
+        }
+
+        // Fetch all receipts for the patient
+        const receipts = await Receipt.find({ patientId }).populate('patientId', 'name phone_number');
+
+        // Enhance medicine details if missing
+        const enhancedReceipts = await Promise.all(receipts.map(async (receipt) => {
+            const enhancedMedicines = await Promise.all(receipt.medicines.map(async (medicine) => {
+                if (medicine.medicineName && medicine.generic && medicine.brand) {
+                    return medicine;
+                }
+                try {
+                    const medicineDoc = await Medicine.findById(medicine.medicineId);
+                    if (medicineDoc) {
+                        return {
+                            ...medicine.toObject(),
+                            medicineName: medicine.medicineName || medicineDoc.name,
+                            generic: medicine.generic || medicineDoc.generic,
+                            brand: medicine.brand || medicineDoc.brand,
+                            price: medicine.price || 0,
+                            batchNumber: medicine.batchNumber || 'N/A'
+                        };
+                    }
+                } catch (error) {
+                    console.warn(`Could not fetch medicine details for ID: ${medicine.medicineId}`);
+                }
+                return {
+                    ...medicine.toObject(),
+                    medicineName: medicine.medicineName || 'Unknown Medicine',
+                    generic: medicine.generic || 'Unknown Generic',
+                    brand: medicine.brand || 'Unknown Brand',
+                    price: medicine.price || 0,
+                    batchNumber: medicine.batchNumber || 'N/A'
+                };
+            }));
+            return { ...receipt.toObject(), medicines: enhancedMedicines };
+        }));
+
+        res.status(200).json({ receipts: enhancedReceipts });
+    } catch (error) {
+        console.error('Error fetching receipts by patient:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+// Get receipts by date range
+exports.getReceiptsByDateRange = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        // Validate date range
+        if (!startDate || !endDate) {
+            return res.status(400).json({ message: 'Invalid date range' });
+        }
+
+        const receipts = await Receipt.find({
+            receiptDate: {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            }
+        }).populate('patientId', 'name phone_number');
+
+        // Enhance medicine details if missing
+        const enhancedReceipts = await Promise.all(receipts.map(async (receipt) => {
+            const enhancedMedicines = await Promise.all(receipt.medicines.map(async (medicine) => {
+                if (medicine.medicineName && medicine.generic && medicine.brand) {
+                    return medicine;
+                }
+                try {
+                    const medicineDoc = await Medicine.findById(medicine.medicineId);
+                    if (medicineDoc) {
+                        return {
+                            ...medicine.toObject(),
+                            medicineName: medicine.medicineName || medicineDoc.name,
+                            generic: medicine.generic || medicineDoc.generic,
+                            brand: medicine.brand || medicineDoc.brand,
+                            price: medicine.price || 0,
+                            batchNumber: medicine.batchNumber || 'N/A'
+                        };
+                    }
+                } catch (error) {
+                    console.warn(`Could not fetch medicine details for ID: ${medicine.medicineId}`);
+                }
+                return {
+                    ...medicine.toObject(),
+                    medicineName: medicine.medicineName || 'Unknown Medicine',
+                    generic: medicine.generic || 'Unknown Generic',
+                    brand: medicine.brand || 'Unknown Brand',
+                    price: medicine.price || 0,
+                    batchNumber: medicine.batchNumber || 'N/A'
+                };
+            }));
+            return { ...receipt.toObject(), medicines: enhancedMedicines };
+        }));
+
+        res.status(200).json({ receipts: enhancedReceipts });
+    } catch (error) {
+        console.error('Error fetching receipts by date range:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+// Get Sales Report by Date Range
+exports.getSalesReportByDateRange = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        // Validate date range
+        if (!startDate || !endDate) {
+            return res.status(400).json({ message: 'Invalid date range' });
+        }
+
+        // Fetch receipts within the date range
+        const receipts = await Receipt.find({
+            receiptDate: {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            }
+        });
+
+        // Calculate total revenue
+        const totalRevenue = receipts.reduce((sum, receipt) => sum + receipt.totalAmount, 0);
+
+        // Calculate total unique patients
+        const uniquePatients = new Set(receipts.map(receipt => receipt.patientId.toString()));
+        const totalPatients = uniquePatients.size;
+
+        // Calculate medicine statistics
+        const medicineStats = {};
+        let totalMedicines = 0;
+
+        receipts.forEach(receipt => {
+            receipt.medicines.forEach(medicine => {
+                const key = medicine.medicineName || medicine.medicineId || 'Unknown Medicine';
+
+                if (!medicineStats[key]) {
+                    medicineStats[key] = {
+                        medicineName: medicine.medicineName || 'Unknown Medicine',
+                        generic: medicine.generic || 'Unknown Generic',
+                        brand: medicine.brand || 'Unknown Brand',
+                        totalQuantitySold: 0,
+                        totalRevenue: 0
+                    };
+                }
+
+                medicineStats[key].totalQuantitySold += medicine.quantity;
+                medicineStats[key].totalRevenue += medicine.total;
+                totalMedicines += medicine.quantity;
+            });
+        });
+
+        // Convert medicine stats to array and sort by total revenue (highest first)
+        const medicineReport = Object.values(medicineStats).sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+        // Count total unique medicine types
+        const totalMedicineTypes = Object.keys(medicineStats).length;
+
+        res.status(200).json({
+            message: 'Sales report generated successfully',
+            report: {
+                summary: {
+                    totalRevenue,
+                    totalPatients,
+                    totalMedicinesSold: totalMedicines,
+                    totalMedicineTypes,
+                    totalReceipts: receipts.length
+                },
+                medicineDetails: medicineReport
+            }
+        });
+
     } catch (error) {
         console.error('Error generating sales report:', error);
         res.status(500).json({ message: 'Internal server error' });
