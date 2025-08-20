@@ -26,4 +26,7 @@ router.post('/generic', medicineController.getMedicineByGeneric);
 // Get medicines by brand name
 router.post('/brand', medicineController.getMedicineByBrand);
 
+// Get available in stock medicines
+router.get('/inventory', medicineController.getAvailableInventory);
+
 module.exports = router;
