@@ -16,7 +16,7 @@ const patientSchema = new mongoose.Schema({
     validate: {
       validator: function(v) {
         // Basic phone validation (adjust regex based on your region)
-        return /^[\+]?[1-9][\d]{0,15}$/.test(v);
+        return /^\+?[0-9\s\-()]{10,20}$/.test(v);
       },
       message: 'Please enter a valid phone number'
     }
