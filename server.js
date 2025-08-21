@@ -64,12 +64,14 @@ app.use("/api/receipt", receiptsRoutes); // NEW: added receipts routes
 const patientRoutes = require("./src/routes/patientRoutes"); // NEW: imported & used
 // const userRoutes = require("./src/routes/userRoutes");
 const outdoorVisitRoutes = require("./src/routes/outdoorVisitRoutes");
+const serviceRoutes      = require('./src/routes/serviceRoutes');      
 
 //MOUNT ROUTES   ⬅️  (before 404 handler)
 
 app.use("/api/patients", patientRoutes); // NEW: makes POST /api/patients/patient-create work
 app.use("/api/users", userRoutes);
 app.use("/api/outdoor-visits", outdoorVisitRoutes);
+app.use('/api/services',       serviceRoutes);  
 
 // 404 & ERROR HANDLERS (keep at the end)
 
